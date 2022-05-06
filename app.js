@@ -10,7 +10,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-
+// uuarios 
 app.post('/cadastrar', async (req, res) => {
     const { name, email, senha, confirmacaoSenha } = req.body;
     if (senha !== confirmacaoSenha) req.sendStatus(404);
@@ -70,6 +70,32 @@ app.get('/login', async(req, res) => {
         console.log("Erro ao criar usuario", error);
     }
 });
+
+// operações
+
+app.post("/operacoes",async (req, res) => {
+    const {valor, descricao, type} = req.body;
+
+    const usuarioSchema = joi.object({
+        value: joi.number().required(),
+        descricao: joi.string().required(),
+        type: joi.string().valid('entrada','saida').required()
+    })
+
+    const {error} = usuarioSchema.validate(req.body,{abortEarly: false});
+    if(error)  return res.status(404).send(error.details.map( detail => detail.message));
+
+    try {
+        await dataBase.collection("operacoes").insertOne(req.body);
+        res.status(201).send("operação adicionada com sucesso");
+       
+    } catch (error) {
+        res.sendStatus(500);
+        console.log("Erro ao adicionar uma nova operação", error);
+    }
+
+});
+
 
 app.listen(3000, () => {
     console.log(chalk.green.bold("Server is running on port 3000"));
