@@ -4,6 +4,7 @@ import cors from "cors";
 import dataBase from "./dataBase.js";
 import joi from "joi";
 import bcrypt from "bcrypt";
+import dayjs from "dayjs";
 import { v4 as uuid } from "uuid";
 
 const app = express();
@@ -42,7 +43,7 @@ app.post('/cadastrar', async (req, res) => {
         
 })
 
-app.get('/login', async(req, res) => {
+app.post('/login', async(req, res) => {
     const {email, senha} = req.body;
 
     const usuarioSchema = joi.object({
@@ -58,7 +59,7 @@ app.get('/login', async(req, res) => {
         if (usuario && bcrypt.compareSync(senha,usuario.senha)){
             const token = uuid();
             await dataBase.collection("sessoes").insertOne({ token, usuarioId: usuario._id });
-            res.status(201).send(token);
+            res.status(201).send({token,name: usuario.name});
             console.log("usuario logado");
         }else{
             res.status(404).send('email ou senha incorretos');
@@ -74,24 +75,94 @@ app.get('/login', async(req, res) => {
 // operações
 
 app.post("/operacoes",async (req, res) => {
+
     const {valor, descricao, type} = req.body;
+    const lastStatus = Date.now();
+    const time = dayjs(lastStatus).format('HH:mm:ss');
+    const authorization = req.headers.authorization;
+    const token = authorization?.replace("Bearer", "").trim();
+    if(!token) {
+        console.log("erro 1")
+        res.sendStatus(401);
+        return;
+    }
+
+    const sessao = await dataBase.collection("sessoes").findOne({token});
+
+    if(!sessao) {
+        console.log("erro 2")
+        res.status(401).send(authorization);
+        return;
+    }
 
     const usuarioSchema = joi.object({
-        value: joi.number().required(),
+        valor: joi.number().required(),
         descricao: joi.string().required(),
-        type: joi.string().valid('entrada','saida').required()
+        type: joi.string().valid('entrada','saída').required()
     })
 
     const {error} = usuarioSchema.validate(req.body,{abortEarly: false});
     if(error)  return res.status(404).send(error.details.map( detail => detail.message));
-
     try {
-        await dataBase.collection("operacoes").insertOne(req.body);
+
+        await dataBase.collection("operacoes").insertOne({
+            valor,
+            descricao,
+            type,
+            time,
+            date: dayjs().format('DD/MM'),
+            usuarioId: sessao.usuarioId
+        });
         res.status(201).send("operação adicionada com sucesso");
        
     } catch (error) {
         res.sendStatus(500);
         console.log("Erro ao adicionar uma nova operação", error);
+    }
+
+});
+
+app.get("/operacoes",async (req, res) => {
+
+    const authorization = req.headers.authorization;
+    const token = authorization?.replace("Bearer", "").trim();
+    let saldo = 0;
+    if(!token) {
+        console.log("erro 1")
+        res.sendStatus(401);
+        return;
+    }
+
+    const sessao = await dataBase.collection("sessoes").findOne({token});
+
+    if(!sessao) {
+        console.log("erro 2")
+        res.status(401).send(authorization);
+        return;
+    }
+
+    
+    try {
+    
+        const operacoes = await dataBase.collection("operacoes").find({usuarioId: sessao.usuarioId}).toArray()
+        const saldo = operacoes.reduce((acc, valor) => {
+            if(valor.type === 'entrada'){
+                return acc + parseFloat(valor.valor);
+            }else{
+                return acc - parseFloat(valor.valor);
+            }
+        }, 0);
+
+        const listOperacoes = operacoes.map(operacao => {
+            delete operacao._id;
+            delete operacao.usuarioId;
+            return operacao;
+        });
+
+        res.send({operacoes:listOperacoes,saldo});
+       
+    } catch (error) {
+        res.status(500).send("Erro ao buscar operações");
     }
 
 });
