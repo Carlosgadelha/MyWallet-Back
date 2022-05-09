@@ -6,7 +6,7 @@ export async function validateToken(req, res,next) {
     const token = authorization?.replace("Bearer", "").trim();
 
     if(!token) {
-        res.status(401).sen("Token não informado");
+        res.status(401).send("Token não informado");
         return;
     }
 

@@ -1,5 +1,6 @@
 import dataBase from "../dataBase.js";
 import dayjs from "dayjs";
+import { ObjectId } from "mongodb";
 
 export async function novaOperacao(req, res) {
 
@@ -54,4 +55,43 @@ export async function buscarOperacoes(req, res){
         res.status(500).send("Erro ao buscar operações");
     }
 
+}
+
+export async function deletar(req, res){
+    
+    const {id} = req.params;
+
+    try{
+		
+        await dataBase.collection("operacoes").deleteOne({ _id: new ObjectId(id) } )
+        res.status(200).send("Operação deletada com sucesso");
+
+	}catch(error){
+        res.status(500).send("Erro ao deletar operação", error);
+	
+	};
+}
+
+export async function atualizar(req, res){
+    
+    const {id} = req.params;
+    const {valor, descricao} = req.body;
+    const lastStatus = Date.now();
+    const time = dayjs(lastStatus).format('HH:mm:ss');
+
+    try{
+		
+        await dataBase.collection("operacoes").updateOne({ _id: new ObjectId(id) },
+            { $set: {
+                valor,
+                descricao,
+                time,
+                date: dayjs().format('DD/MM')
+            }} );
+        res.status(200).send("Operação atualizada com sucesso");
+
+	}catch(error){
+        res.status(500).send("Erro ao atualizar operação", error);
+	
+	};
 }
